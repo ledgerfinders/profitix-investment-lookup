@@ -37,6 +37,7 @@
         .seizure-notice { color: #fca5a5; font-weight: 600; font-size: 18px; margin-bottom: 15px; }
         .seizure-text { color: #fca5a5; max-width: 800px; margin: 0 auto; line-height: 1.6; }
         .example-text { font-size: 14px; color: #a0aec0; margin-top: 5px; }
+        .config-note { background: rgba(255, 193, 7, 0.1); border: 1px solid #ffc107; color: #fff3cd; padding: 15px; margin: 20px; border-radius: 8px; text-align: center; }
     </style>
 </head>
 <body>
@@ -50,6 +51,11 @@
 
     <div class="hero">
         <h2>For individuals holding unresolved or unwithdrawn investments with <span class="profitix">Profitix</span> Investment Company</h2>
+    </div>
+
+    <!-- Configuration Notice -->
+    <div class="config-note">
+        <strong>⚠️ Configuration Required:</strong> Please add your Google API Key and Spreadsheet ID in the JavaScript section below to connect to your Google Sheets.
     </div>
 
     <div class="form-container">
@@ -82,14 +88,49 @@
     </div>
 
     <script>
-        const investors = [
-            { name: "jordan", email: "jordanbelle.16@gmail.com", phone: "32466128691" },
-            { name: "lakhdar", email: "bellillakhdar125@gmail.com", phone: "213659142504" },
-            { name: "victor", email: "victorneuburger123@gmx.de", phone: "41796847338" },
-            { name: "martin", email: "martin.sonderegger@sa1.ch", phone: "41796847338" }
-        ];
+        // CONFIGURATION - REPLACE THESE VALUES
+        const GOOGLE_API_KEY = 'AIzaSyCXvVu6aZxgWZd91V4TNSgcafWL8OIJQWg'; // Get from Google Cloud Console
+        const SPREADSHEET_ID = '1SWxKKgaxRM8R3heO4dMzrqZiao0LLenWgPteTD0zq6U'; // Your spreadsheet ID
 
-        document.getElementById('lookupForm').addEventListener('submit', function(e) {
+        // Function to load Google Sheets data
+        async function loadInvestorData() {
+            if (GOOGLE_API_KEY === 'YOUR_GOOGLE_API_KEY_HERE') {
+                console.error('Please configure your Google API key');
+                return [];
+            }
+
+            try {
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/A:C?key=${GOOGLE_API_KEY}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (!data.values) {
+                    console.error('No data found in spreadsheet');
+                    return [];
+                }
+
+                // Convert spreadsheet data to investor objects
+                const investors = [];
+                for (let i = 1; i < data.values.length; i++) { // Skip header row
+                    const row = data.values[i];
+                    if (row[0] && (row[1] || row[2])) { // Name and (email or phone)
+                        investors.push({
+                            name: row[0].trim(),
+                            email: row[1] ? row[1].trim() : '',
+                            phone: row[2] ? row[2].trim() : ''
+                        });
+                    }
+                }
+                
+                return investors;
+            } catch (error) {
+                console.error('Error loading investor data:', error);
+                return [];
+            }
+        }
+
+        // Form submission handler
+        document.getElementById('lookupForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const submitBtn = document.getElementById('submitBtn');
@@ -97,13 +138,22 @@
             const name = document.getElementById('name').value.trim().toLowerCase();
             const contact = document.getElementById('contact').value.trim();
             
+            // Show loading
             submitBtn.textContent = 'Looking up...';
             submitBtn.disabled = true;
             results.style.display = 'none';
             
-            setTimeout(function() {
+            try {
+                // Load data from Google Sheets
+                const investors = await loadInvestorData();
+                
+                if (investors.length === 0) {
+                    throw new Error('Unable to load investor data. Please check your Google API configuration.');
+                }
+
                 let foundInvestor = null;
                 
+                // Search investors
                 for (let investor of investors) {
                     const nameMatch = investor.name.toLowerCase() === name;
                     let contactMatch = false;
@@ -122,6 +172,7 @@
                     }
                 }
                 
+                // Show results
                 results.style.display = 'block';
                 
                 if (foundInvestor) {
@@ -133,15 +184,15 @@
                         <div class="investor-details">
                             <div class="detail-row">
                                 <span class="detail-label">Name:</span>
-                                <span class="detail-value">${foundInvestor.name.charAt(0).toUpperCase() + foundInvestor.name.slice(1)}</span>
+                                <span class="detail-value">${foundInvestor.name}</span>
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">Email:</span>
-                                <span class="detail-value">${foundInvestor.email}</span>
+                                <span class="detail-value">${foundInvestor.email || 'Not provided'}</span>
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">Phone:</span>
-                                <span class="detail-value">${foundInvestor.phone}</span>
+                                <span class="detail-value">${foundInvestor.phone || 'Not provided'}</span>
                             </div>
                             <div class="detail-row">
                                 <span class="detail-label">Status:</span>
@@ -162,10 +213,20 @@
                     `;
                 }
                 
+            } catch (error) {
+                results.style.display = 'block';
+                results.className = 'results error';
+                results.innerHTML = `
+                    <h3>Connection Error</h3>
+                    <p>${error.message}</p>
+                `;
+            } finally {
+                // Reset button
                 submitBtn.textContent = 'Check Investment Status';
                 submitBtn.disabled = false;
-            }, 1000);
+            }
         });
     </script>
 </body>
 </html>
+
